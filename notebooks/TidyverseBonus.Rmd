@@ -1,0 +1,299 @@
+---
+title: "Tidyverse Solo Exercise"
+output: html_notebook
+---
+
+In this project, I'll be working with education data using the tidyverse libraries. I'll be working with data on each of 145 school districts and the State of Tennessee. This data contains, for the 2014-2015 school year:
+
+    Proficiency rates on state tests
+    Student demographics
+    Chronic absenteeism
+    Discipline (suspension, expulsion) rates
+    High school graduation, dropout rates
+    Average ACT composite scores
+    A region in Tennessee
+
+```{r}
+library(tidyverse)
+library(ggthemes)
+install.packages("readxl")
+library(readxl)
+```
+
+1. Read in districts.csv into a tibble named districts.
+
+```{r}
+districts <- read_csv('../data/districts.csv')
+```
+
+2. Notice that the first row corresponds to the whole State of Tennessee. Remove this row and save the result back to districts.
+
+```{r}
+districts |>
+  head(1)
+```
+```{r}
+districts <- districts |>
+  filter(system_name != 'State of Tennessee')
+
+districts |> 
+  head(1)
+```
+
+3. How many districts have a proficiency rate of at least 80% for both alg_1 and eng_1?
+
+```{r}
+high_alg_eng <- districts |>
+  filter(alg_1 >= 80 & eng_1 >= 80) |>
+  distinct(system_name) |>
+  nrow()
+
+paste0('There were ', high_alg_eng,' districts with a proficiency rate at least 80% for both Algebra I and English I.')
+```
+
+
+4. How many districts have a proficiency rate less than 50% for either alg_1 or eng_1?
+
+```{r}
+low_alg_eng <- districts |>
+  filter(alg_1 < 50 | eng_1 < 50) |>
+  distinct(system_name) |>
+  nrow()
+
+paste0('There were ', low_alg_eng,' districts with a proficiency rate less than 50% for either Algebra I or English I.')
+```
+
+
+5. Which district has the lowest graduation rate?
+
+```{r}
+lowest_grad <- districts |>
+  slice_min(grad) |>
+  select(system_name)
+
+paste0('The ', lowest_grad,' district has the lowest graduation rate in Tennessee.')
+```
+
+
+6. Within the Mid Cumberland region, which district has the highest ACT composite?
+
+
+```{r}
+highest_ACT_mid_cumberland <- districts |>
+  filter(region == 'Mid Cumberland') |>
+  slice_max(act_composite) |>
+  select(system_name)
+
+paste0('Within the Mid Cumberland region, the ', highest_ACT_mid_cumberland,' district has the highest ACT composite.')
+```
+
+
+7. Create a scatter plot to compare alg_1 proficiency rates to alg_2 rates. What do you notice? Facet this plot by region. Does anything stand out when you facet the plots?
+
+```{r}
+districts |>
+  ggplot(aes(x=alg_1, y=alg_2)) +
+  geom_point(aes(color=region)) +
+  labs(title = "Tennessee Algebra I and Algebra II Proficiency Rates",
+  x = "Algebra I Proficiency Rate", y = "Algebra II Proficiency Rate") +
+  scale_color_colorblind()
+```
+There is a moderately strong positive linear correlation between Algebra I and Algebra II proficiency rates in Tennessee. 
+
+```{r}
+districts |>
+  ggplot(aes(x=alg_1, y=alg_2)) +
+  geom_point() +
+  labs(title = "Tennessee Algebra I and Algebra II Proficiency Rates",
+  x = "Algebra I Proficiency Rate", y = "Algebra II Proficiency Rate") +
+  facet_wrap(~region)
+```
+Most of the regions show a moderately strong positive correlation between Algebra I and Algebra II proficiency rates, similar to the overall plot. The exceptions are the Southeast and Upper Cumberland regions; both show almost no correlation at all. In addition, it is interesting to look at the spread of proficiency rates for each region; for example, the scores in the Northwest are clustered in the upper right, meaning both Algebra I and II proficiency rates tend to be high. In the Southwest/Memphis region, the data points cover a wider range on both axes; Algebra I proficiency rates vary from about 30 to 90, and Algebra II proficiency rates vary from about 25 to 85.
+
+8. Some districts have missing enrollment values. For how many districts is this the case?
+
+```{r}
+missing_enrollment <- districts |>
+  filter(is.na(enrollment)) |>
+  distinct(system_name) |>
+  nrow()
+
+paste0('There are ', missing_enrollment,' districts with missing enrollment values.')
+```
+
+
+9. A lot of rows are missing additional values. Which district has the largest number of missing values (across all variables)? Hint: you might want to look at rowwise and c_across to answer this question.
+
+```{r}
+most_na <- districts |>
+  # Coerce all columns to compatible datatypes
+  mutate(across(1:length(districts), ~as.character(.))) |>
+  rowwise() |>
+  mutate(na_total = sum(is.na(c_across(1:length(districts))))) |>
+  ungroup() |>
+  slice_max(na_total) |>
+  select(system_name, na_total) |>
+  as.list()
+
+paste0(most_na$system_name,' has the the highest number of missing values, at ',most_na$na_total,'.')
+```
+
+10. What is the mean graduation rate across all districts? What might be wrong with using just the regular mean to assess average graduation rates?
+
+```{r}
+mean_grad <- districts |>
+  summarize(mean_grad = mean(grad, na.rm = TRUE))
+
+paste0('The mean graduation rate across all districts is ',round(mean_grad$mean_grad,digits=2))
+```
+
+District student populations might vary widely, so a weighted mean would be a better representation than the regular mean.
+
+11. Redo the previous question but use a weighted average (weighted.mean) graduation across all districts, weighing by enrollment. How much does this change your answer? Can you explain using the data the reason for the big change from using the mean?
+
+```{r}
+wt_mean_tibble <- districts |>
+  select(grad,enrollment,system_name,region) |>
+  # Replace all NA values with 0
+  mutate(grad = replace_na(grad, 0)) |>
+  mutate(enrollment = replace_na(enrollment,0))
+  
+wt_mean_grad <- wt_mean_tibble |>
+  summarize(wt_mean_grad = weighted.mean(grad, enrollment))
+
+paste0('The mean graduation rate across all districts, weighted by enrollment, is ',round(wt_mean_grad$wt_mean_grad,digits=2))
+```
+
+```{r}
+districts |>
+  summarise(
+    mean_enrollment = mean(enrollment, na.rm = TRUE),
+    median_enrollment = median(enrollment, na.rm = TRUE),
+    sd_enrollment = sd(enrollment, na.rm = TRUE)
+  )
+```
+```{r}
+districts |>
+  ggplot(aes(x = enrollment)) +
+  geom_histogram(bins = 20)
+```
+```{r}
+districts |>
+  ggplot(aes(x = enrollment, y = grad)) +
+  geom_point()
+```
+
+There is a huge amount of variation in enrollment by district, with a standard deviation of over 13,000 students. In addition, the largest 2-3 districts by enrollment have a graduation rate that is much less than the average, while the districts with the highest graduation rates have relatively low enrollment. This explains the large decrease in the mean after we weight it by enrollment.
+
+12. Find the unweighted and weighted average graduation rate by district.
+
+
+Unweighted average graduation rate by region:
+```{r}
+districts |>
+  group_by(region) |> 
+  summarize(mean_grad = mean(grad, na.rm = TRUE))
+```
+
+Weighted average graduation rate by region:
+```{r}
+wt_mean_tibble |>
+  group_by(region) |> 
+  summarize(wt_mean_grad = weighted.mean(grad, enrollment))
+```
+
+
+13. Read in the school-level testing data for 2014, available here. You might find the readxl library useful for this task. If you use this library, be sure to look at the na argument for the read_excel function.
+
+```{r}
+# Missing data is denoted by either * or **, but can only specify 1
+testing <- read_xlsx('../data/data_2014_school_base.xlsx', na='*')
+testing
+```
+Convert numerical columns to numerical datatypes. Missing data indicated by ** will automatically be converted to NA.
+```{r}
+testing <- testing |>
+  mutate(across(n_below_bsc:pct_adv, as.numeric))
+```
+
+To answer the following questions, use "All Students" for the subgroup.
+
+14. How many schools have at least 20 percent of students below bsc for Algebra I? Which districts do these schools belong to?
+
+```{r}
+num_low_alg_I = testing |>
+  filter(subgroup=='All Students' & grade=='All Grades' & subject=='Algebra I' & pct_below_bsc >= 20) |>
+  distinct(school_name) |>
+  count() |>
+  pull()
+  
+paste0('There are ',num_low_alg_I,' schools with at least 20 percent of students below bsc for Algebra I.')
+```
+
+Districts with at least 20 percent of students below bsc for Algebra I:
+```{r}
+dist_low_alg_I = testing |>
+  filter(subgroup=='All Students' & grade=='All Grades' & subject=='Algebra I' & pct_below_bsc >= 20) |>
+  distinct(system_name)
+  
+dist_low_alg_I
+```
+
+
+15. How many schools have at least 20 percent of students below bsc for both Algebra I and English I?
+
+```{r}
+num_low_alg1_eng1 <- testing |>
+  filter(subgroup=='All Students' & grade=='All Grades' & subject %in% c('Algebra I', 'English I') & pct_below_bsc >= 20) |>
+  count(school_name) |>
+  filter(n==2) |>
+  nrow()
+
+paste0('There are ',num_low_alg1_eng1,' schools with at least 20 percent of students below bsc for both Algebra I and English I.')
+```
+
+
+16. Which grade has the highest pct_adv for Algebra I? Plot the average pct_adv per grade level as a bar chart. Make sure that the bars are ordered by grade level.
+
+```{r}
+pct_adv_by_grade <- testing |>
+  filter(!(grade %in% c('All Grades', 'Missing Grade')) & subject=='Algebra I') |>
+  group_by(grade) |>
+  summarize(avg_pct_adv = mean(pct_adv, na.rm=TRUE)) |>
+  mutate(grade = as.numeric(grade)) |>
+  arrange(grade)
+
+highest_pct_adv_by_grade <- pct_adv_by_grade |>
+  slice_max(avg_pct_adv)
+
+paste0('Grade ',highest_pct_adv_by_grade$grade,' has the highest average pct_adv.')
+```
+```{r}
+pct_adv_by_grade |>
+  ggplot(aes(x=grade, y=avg_pct_adv)) +
+  geom_col()
+```
+
+
+17. Find the correlation between pct_adv for Algebra I and pct_adv for Algebra II by school. Create a scatterplot showing Algebra II scores vs. Algebra I scores by school.
+
+```{r}
+
+```
+
+
+18. Find all schools in Rutherford County that have "High School" in their name. For these schools, create a chart (your choice) showing the differences in pct_below_bsc, pct_bsc, pct_prof, and pct_adv for Algebra I when looking across all subgroups and grades.
+
+```{r}
+
+```
+
+
+19. Create a function which allows you to select a system_name and which creates a plot to show the differences in pct_below_bsc, pct_bsc, pct_prof, and pct_adv for Algebra I when looking across all subgroups and grades for all schools with "High School" in their names within that system.
+
+```{r}
+
+```
+
+
+
