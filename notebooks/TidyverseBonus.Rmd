@@ -16,8 +16,8 @@ In this project, I'll be working with education data using the tidyverse librari
 ```{r}
 library(tidyverse)
 library(ggthemes)
-install.packages("readxl")
 library(readxl)
+library(corrr)
 ```
 
 1. Read in districts.csv into a tibble named districts.
@@ -48,7 +48,7 @@ high_alg_eng <- districts |>
   distinct(system_name) |>
   nrow()
 
-paste0('There were ', high_alg_eng,' districts with a proficiency rate at least 80% for both Algebra I and English I.')
+paste('There were', high_alg_eng,'districts with a proficiency rate at least 80% for both Algebra I and English I.')
 ```
 
 
@@ -60,7 +60,7 @@ low_alg_eng <- districts |>
   distinct(system_name) |>
   nrow()
 
-paste0('There were ', low_alg_eng,' districts with a proficiency rate less than 50% for either Algebra I or English I.')
+paste('There were', low_alg_eng,'districts with a proficiency rate less than 50% for either Algebra I or English I.')
 ```
 
 
@@ -71,7 +71,7 @@ lowest_grad <- districts |>
   slice_min(grad) |>
   select(system_name)
 
-paste0('The ', lowest_grad,' district has the lowest graduation rate in Tennessee.')
+paste('The', lowest_grad,'district has the lowest graduation rate in Tennessee.')
 ```
 
 
@@ -84,7 +84,7 @@ highest_ACT_mid_cumberland <- districts |>
   slice_max(act_composite) |>
   select(system_name)
 
-paste0('Within the Mid Cumberland region, the ', highest_ACT_mid_cumberland,' district has the highest ACT composite.')
+paste('Within the Mid Cumberland region, the', highest_ACT_mid_cumberland,'district has the highest ACT composite.')
 ```
 
 
@@ -118,7 +118,7 @@ missing_enrollment <- districts |>
   distinct(system_name) |>
   nrow()
 
-paste0('There are ', missing_enrollment,' districts with missing enrollment values.')
+paste('There are', missing_enrollment,'districts with missing enrollment values.')
 ```
 
 
@@ -135,7 +135,7 @@ most_na <- districts |>
   select(system_name, na_total) |>
   as.list()
 
-paste0(most_na$system_name,' has the the highest number of missing values, at ',most_na$na_total,'.')
+paste(most_na$system_name,'has the the highest number of missing values, at',most_na$na_total,'.')
 ```
 
 10. What is the mean graduation rate across all districts? What might be wrong with using just the regular mean to assess average graduation rates?
@@ -144,7 +144,7 @@ paste0(most_na$system_name,' has the the highest number of missing values, at ',
 mean_grad <- districts |>
   summarize(mean_grad = mean(grad, na.rm = TRUE))
 
-paste0('The mean graduation rate across all districts is ',round(mean_grad$mean_grad,digits=2))
+paste('The mean graduation rate across all districts is',round(mean_grad$mean_grad,digits=2))
 ```
 
 District student populations might vary widely, so a weighted mean would be a better representation than the regular mean.
@@ -161,7 +161,7 @@ wt_mean_tibble <- districts |>
 wt_mean_grad <- wt_mean_tibble |>
   summarize(wt_mean_grad = weighted.mean(grad, enrollment))
 
-paste0('The mean graduation rate across all districts, weighted by enrollment, is ',round(wt_mean_grad$wt_mean_grad,digits=2))
+paste('The mean graduation rate across all districts, weighted by enrollment, is',round(wt_mean_grad$wt_mean_grad,digits=2))
 ```
 
 ```{r}
@@ -175,12 +175,18 @@ districts |>
 ```{r}
 districts |>
   ggplot(aes(x = enrollment)) +
-  geom_histogram(bins = 20)
+  geom_histogram(bins = 20) +
+  labs(title = "Enrollment Distribution",
+  subtitle = "For Tennessee School Districts, 2014-2015 School Year",
+  x = "Enrollment", y = "Count")
 ```
 ```{r}
 districts |>
   ggplot(aes(x = enrollment, y = grad)) +
-  geom_point()
+  geom_point() +
+  labs(title = "Graduation Rate versus Enrollment",
+  subtitle = "For Tennessee School Districts, 2014-2015 School Year",
+  x = "Enrollment", y = "Graduation Rate")
 ```
 
 There is a huge amount of variation in enrollment by district, with a standard deviation of over 13,000 students. In addition, the largest 2-3 districts by enrollment have a graduation rate that is much less than the average, while the districts with the highest graduation rates have relatively low enrollment. This explains the large decrease in the mean after we weight it by enrollment.
@@ -201,7 +207,6 @@ wt_mean_tibble |>
   group_by(region) |> 
   summarize(wt_mean_grad = weighted.mean(grad, enrollment))
 ```
-
 
 13. Read in the school-level testing data for 2014, available here. You might find the readxl library useful for this task. If you use this library, be sure to look at the na argument for the read_excel function.
 
@@ -227,10 +232,10 @@ num_low_alg_I = testing |>
   count() |>
   pull()
   
-paste0('There are ',num_low_alg_I,' schools with at least 20 percent of students below bsc for Algebra I.')
+paste('There are',num_low_alg_I,'schools with at least 20 percent of students below standard cut for Algebra I.')
 ```
 
-Districts with at least 20 percent of students below bsc for Algebra I:
+Districts with at least 20 percent of students below standard cut for Algebra I:
 ```{r}
 dist_low_alg_I = testing |>
   filter(subgroup=='All Students' & grade=='All Grades' & subject=='Algebra I' & pct_below_bsc >= 20) |>
@@ -240,7 +245,7 @@ dist_low_alg_I
 ```
 
 
-15. How many schools have at least 20 percent of students below bsc for both Algebra I and English I?
+15. How many schools have at least 20 percent of students below standard cut for both Algebra I and English I?
 
 ```{r}
 num_low_alg1_eng1 <- testing |>
@@ -249,51 +254,111 @@ num_low_alg1_eng1 <- testing |>
   filter(n==2) |>
   nrow()
 
-paste0('There are ',num_low_alg1_eng1,' schools with at least 20 percent of students below bsc for both Algebra I and English I.')
+paste('There are',num_low_alg1_eng1,'schools with at least 20 percent of students below standard cut for both Algebra I and English I.')
 ```
 
 
 16. Which grade has the highest pct_adv for Algebra I? Plot the average pct_adv per grade level as a bar chart. Make sure that the bars are ordered by grade level.
 
 ```{r}
-pct_adv_by_grade <- testing |>
+pct_adv_algI_by_grade <- testing |>
   filter(!(grade %in% c('All Grades', 'Missing Grade')) & subject=='Algebra I') |>
   group_by(grade) |>
   summarize(avg_pct_adv = mean(pct_adv, na.rm=TRUE)) |>
   mutate(grade = as.numeric(grade)) |>
   arrange(grade)
 
-highest_pct_adv_by_grade <- pct_adv_by_grade |>
+pct_adv_algI_by_grade
+```
+
+```{r}
+highest_pct_adv_algI_by_grade <- pct_adv_algI_by_grade |>
   slice_max(avg_pct_adv)
 
-paste0('Grade ',highest_pct_adv_by_grade$grade,' has the highest average pct_adv.')
-```
-```{r}
-pct_adv_by_grade |>
-  ggplot(aes(x=grade, y=avg_pct_adv)) +
-  geom_col()
+paste('Grade',highest_pct_adv_by_grade$grade,'has the highest average percent of students who are advanced in Algebra I.')
 ```
 
+
+```{r}
+pct_adv_algI_by_grade |>
+  filter(grade %in% 8:12) |>
+  ggplot(aes(x=grade, y=avg_pct_adv)) +
+  geom_col() +
+  labs(title = "Average Percent Advanced in Algebra I by Grade",
+  subtitle = "For Tennessee School Districts, 2014-2015 School Year",
+  x = "Grade", y = "Average Percent Advanced")
+```
 
 17. Find the correlation between pct_adv for Algebra I and pct_adv for Algebra II by school. Create a scatterplot showing Algebra II scores vs. Algebra I scores by school.
 
 ```{r}
+algI_pct_adv <- testing |>
+  filter(subgroup=='All Students' & grade=='All Grades' & subject=='Algebra I') |>
+  group_by(school_name) |>
+  summarize(pct_adv_algI = mean(pct_adv))
 
+algII_pct_adv <- testing |>
+  filter(subgroup=='All Students' & grade=='All Grades' & subject=='Algebra II') |>
+  group_by(school_name) |>
+  summarize(pct_adv_algII = mean(pct_adv))
+
+algI_II_pct_adv <- inner_join(algI_pct_adv, algII_pct_adv)
+
+algI_II_pct_adv |>
+  select(pct_adv_algI, pct_adv_algII) |>
+  correlate()
 ```
+The correlation between pct_adv for Algebra I and pct_adv for Algebra II by school is 0.615, which is a moderately strong positive relationship. This indicates that higher Algebra I averages are associated with higher Algebra II averages. 
 
+```{r}
+algI_II_pct_adv |>
+  ggplot(aes(x=pct_adv_algI, y=pct_adv_algII)) +
+  geom_point() +
+  labs(title = "Average Percent Advanced for Algebra II versus Algebra I",
+  subtitle = "For Each Tennessee School, 2014-2015 School Year",
+  x = "Percent Advanced in Algebra I", y = "Percent Advanced in Algebra II")
+```
 
 18. Find all schools in Rutherford County that have "High School" in their name. For these schools, create a chart (your choice) showing the differences in pct_below_bsc, pct_bsc, pct_prof, and pct_adv for Algebra I when looking across all subgroups and grades.
 
 ```{r}
-
+testing |>
+  filter(subject=='Algebra I' & system_name=='Rutherford County' & str_detect(school_name, 'High School') & subgroup=='All Students' & grade=='All Grades') |>
+  summarize('Avg Percent Below BSC' = mean(pct_below_bsc, na.rm=TRUE), 'Avg Percent At BSC' = mean(pct_bsc, na.rm=TRUE), 'Avg Percent Proficient' = mean(pct_prof, na.rm=TRUE), 'Avg Percent Advanced' = mean(pct_adv, na.rm=TRUE)) |>
+  pivot_longer(cols=everything(), names_to = "Proficiency", values_to = "Average") |>
+  mutate(Proficiency = factor(Proficiency, levels = c('Avg Percent Below BSC', 'Avg Percent At BSC', 'Avg Percent Proficient', 'Avg Percent Advanced'))) |>
+  ggplot(aes(x=Proficiency,y=Average)) +
+  geom_col() +
+  labs(title = "Distribution of Algebra I Proficiency Levels",
+  subtitle = "For Rutherford County High Schools, 2014-2015 School Year",
+  x = "Percent Advanced in Algebra I", y = "Percent Advanced in Algebra II")
 ```
-
 
 19. Create a function which allows you to select a system_name and which creates a plot to show the differences in pct_below_bsc, pct_bsc, pct_prof, and pct_adv for Algebra I when looking across all subgroups and grades for all schools with "High School" in their names within that system.
 
 ```{r}
-
+prof_dist_algI <- function(schoolsystem) {
+  chart_subtitle <- paste('For',schoolsystem,'High Schools, 2014-2015 School Year')
+    
+  testing |>
+    filter(subject=='Algebra I' & system_name==schoolsystem & str_detect(school_name, 'High School') & subgroup=='All Students' & grade=='All Grades') |>
+  summarize('Avg Percent Below BSC' = mean(pct_below_bsc, na.rm=TRUE), 'Avg Percent At BSC' = mean(pct_bsc, na.rm=TRUE), 'Avg Percent Proficient' = mean(pct_prof, na.rm=TRUE), 'Avg Percent Advanced' = mean(pct_adv, na.rm=TRUE)) |>
+  pivot_longer(cols=everything(), names_to = "Proficiency", values_to = "Average") |>
+  mutate(Proficiency = factor(Proficiency, levels = c('Avg Percent Below BSC', 'Avg Percent At BSC', 'Avg Percent Proficient', 'Avg Percent Advanced'))) |>
+  ggplot(aes(x=Proficiency,y=Average)) +
+  geom_col() +
+  labs(title = "Distribution of Algebra I Proficiency Levels",
+  subtitle = chart_subtitle,
+  x = "Percent Advanced in Algebra I", y = "Percent Advanced in Algebra II")
+}
 ```
 
+```{r}
+prof_dist_algI('Williamson County')
+```
+
+```{r}
+prof_dist_algI('Davidson County')
+```
 
 
