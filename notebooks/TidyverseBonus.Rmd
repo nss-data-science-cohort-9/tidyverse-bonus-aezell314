@@ -360,5 +360,8 @@ prof_dist_algI('Williamson County')
 ```{r}
 prof_dist_algI('Davidson County')
 ```
+```{r}
+prof_dist_algI('Franklin County')
+```
 
 
